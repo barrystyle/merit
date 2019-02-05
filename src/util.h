@@ -342,4 +342,6 @@ template <typename Callable> void TraceThread(const char* name,  Callable func)
 
 std::string CopyrightHolders(const std::string& strPrefix);
 
+long long current_timestamp();
+
 #endif // MERIT_UTIL_H

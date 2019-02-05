@@ -902,3 +902,15 @@ int64_t GetStartupTime()
 {
     return nStartupTime;
 }
+
+// timestamp code from yiimp
+long long current_timestamp()
+{
+	long long milliseconds;
+	struct timespec te;
+
+	clock_gettime(CLOCK_REALTIME, &te);
+
+	milliseconds = 1000LL*te.tv_sec + round(te.tv_nsec/1e6);
+	return milliseconds;
+}
