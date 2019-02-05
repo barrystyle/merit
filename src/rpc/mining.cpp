@@ -432,6 +432,8 @@ UniValue getblocktemplate(const JSONRPCRequest& request)
 
     LOCK(cs_main);
 
+    int s1, s2;
+
     std::string strMode = "template";
     UniValue lpval = NullUniValue;
     std::set<std::string> setClientRules;
@@ -451,6 +453,11 @@ UniValue getblocktemplate(const JSONRPCRequest& request)
         lpval = find_value(oparam, "longpollid");
 
         if (strMode == "proposal") {
+
+            /////////////////////////////
+            s1 = current_timestamp();
+            /////////////////////////////
+
             const UniValue& dataval = find_value(oparam, "data");
             if (!dataval.isStr())
                 throw JSONRPCError(RPC_TYPE_ERROR, "Missing data String key for proposal");
@@ -476,6 +483,12 @@ UniValue getblocktemplate(const JSONRPCRequest& request)
                 return "inconclusive-not-best-prevblk";
             CValidationState state;
             TestBlockValidity(state, Params(), block, pindexPrev, false, true);
+
+            /////////////////////////////
+            s2 = current_timestamp();
+            LogPrintf("proposal chunk took %dms\n", (s2-s1));
+            /////////////////////////////
+
             return BIP22ValidationResult(state);
         }
 
@@ -492,6 +505,11 @@ UniValue getblocktemplate(const JSONRPCRequest& request)
     CTxDestination default_address;
 
 #ifdef ENABLE_WALLET
+
+    /////////////////////////////
+    s1 = current_timestamp();
+    /////////////////////////////
+
     const auto pwallet = GetWalletForJSONRPCRequest(request);
     // check that wallet is alredy referred or has unlock transaction
     if (!pwallet->IsReferred() && pwallet->mapWalletRTx.empty()) {
@@ -501,6 +519,12 @@ UniValue getblocktemplate(const JSONRPCRequest& request)
         assert(root_ref);
         default_address = CMeritAddress{root_ref->addressType, root_ref->GetAddress()}.Get();
     }
+
+    /////////////////////////////
+    s2 = current_timestamp();
+    LogPrintf("findwalletaddr chunk took %dms\n", (s2-s1));
+    /////////////////////////////
+
 #else
     default_address = CScriptID{Params().GetConsensus().genesis_address};
 #endif
@@ -553,6 +577,10 @@ UniValue getblocktemplate(const JSONRPCRequest& request)
             nTransactionsUpdatedLastLP = nTransactionsUpdatedLast;
         }
 
+	/////////////////////////////
+	s1 = current_timestamp();
+	/////////////////////////////
+
         // Release the wallet and main lock while waiting
         LEAVE_CRITICAL_SECTION(cs_main);
         {
@@ -570,6 +598,11 @@ UniValue getblocktemplate(const JSONRPCRequest& request)
         }
         ENTER_CRITICAL_SECTION(cs_main);
 
+        /////////////////////////////
+        s2 = current_timestamp();
+        LogPrintf("txmempool chunk took %dms\n", (s2-s1));
+        /////////////////////////////
+
         if (!IsRPCRunning())
             throw JSONRPCError(RPC_CLIENT_NOT_CONNECTED, "Shutting down");
         // TODO: Maybe recheck connections/IBD and (if something wrong) send an expires-immediately template to stop miners?
@@ -581,8 +614,12 @@ UniValue getblocktemplate(const JSONRPCRequest& request)
     static std::unique_ptr<CBlockTemplate> pblocktemplate;
     const Consensus::Params& consensusParams = Params().GetConsensus();
 
-
     if (pindexPrev != chainActive.Tip() || (mempool.GetTransactionsUpdated() != nTransactionsUpdatedLast && GetTime() - nStart > 5)) {
+
+	/////////////////////////////
+	s1 = current_timestamp();
+	/////////////////////////////
+
         // Clear pindexPrev so future calls make a new block, despite any failures from here on
         pindexPrev = nullptr;
 
@@ -600,6 +637,11 @@ UniValue getblocktemplate(const JSONRPCRequest& request)
             throw JSONRPCError(RPC_OUT_OF_MEMORY, "Out of memory");
 
         pindexPrev = pindexPrevNew;
+
+        /////////////////////////////
+        s2 = current_timestamp();
+        LogPrintf("txlist/block/coinbasetxn chunk took %dms\n", (s2-s1));
+        /////////////////////////////
     }
     CBlock* pblock = &pblocktemplate->block; // pointer for convenience
 
@@ -607,6 +649,10 @@ UniValue getblocktemplate(const JSONRPCRequest& request)
     UpdateTime(pblock, consensusParams, pindexPrev);
     pblock->nNonce = 0;
     UniValue aCaps(UniValue::VARR); aCaps.push_back("proposal");
+
+    /////////////////////////////
+    s1 = current_timestamp();
+    /////////////////////////////
 
     UniValue transactions(UniValue::VARR);
     std::map<uint256, int64_t> setTxIndex;
@@ -643,6 +689,15 @@ UniValue getblocktemplate(const JSONRPCRequest& request)
         transactions.push_back(entry);
     }
 
+    /////////////////////////////
+    s2 = current_timestamp();
+    LogPrintf("txdata/serialize chunk took %dms\n", (s2-s1));
+    /////////////////////////////
+
+    /////////////////////////////
+    s1 = current_timestamp();
+    /////////////////////////////
+
     i = 0;
     UniValue invites(UniValue::VARR);
     for (const auto& it : pblock->invites) {
@@ -672,6 +727,11 @@ UniValue getblocktemplate(const JSONRPCRequest& request)
 
         invites.push_back(entry);
     }
+
+    /////////////////////////////
+    s2 = current_timestamp();
+    LogPrintf("invite/referral chunk took %dms\n", (s2-s1));
+    /////////////////////////////
 
     i = 0;
     UniValue referrals(UniValue::VARR);
